@@ -52,6 +52,8 @@ use service_async::{
 pub use self::{nativetls::NativeTlsService, rustls::RustlsService};
 use self::{nativetls::NativeTlsServiceFactory, rustls::RustlsServiceFactory};
 use crate::tcp::Accept;
+use rustls_pemfile::{certs, pkcs8_private_keys};
+use rustls_pki_types::PrivateKeyDer;
 
 mod nativetls;
 mod rustls;
@@ -269,21 +271,18 @@ impl TryFrom<TlsConfig<(Vec<u8>, Vec<u8>), (Vec<u8>, Vec<u8>)>> for TlsConfig {
     ) -> Result<Self, Self::Error> {
         match value {
             TlsConfig::Rustls((chain, key)) => {
-                let chain = rustls_pemfile::certs(&mut Cursor::new(&chain))?
-                    .into_iter()
-                    .map(::rustls::Certificate)
-                    .collect::<Vec<_>>();
+                let chain: Vec<_> = certs(&mut Cursor::new(&chain))
+                    .collect::<Result<_, _>>()?;
                 if chain.is_empty() {
                     anyhow::bail!("empty cert file");
                 }
-                let key = rustls_pemfile::pkcs8_private_keys(&mut Cursor::new(&key))?
+                let key = pkcs8_private_keys(&mut Cursor::new(&key))
+                    .collect::<Result<Vec<_>, _>>()?
                     .pop()
-                    .map(::rustls::PrivateKey)
                     .ok_or_else(|| anyhow::anyhow!("empty key file"))?;
-                let mut scfg = ::rustls::ServerConfig::builder()
-                    .with_safe_defaults()
-                    .with_no_client_auth()
-                    .with_single_cert(chain, key)?;
+                let builder = ::rustls::ServerConfig::builder();
+                let builder = builder.with_no_client_auth();
+                let mut scfg = builder.with_single_cert(chain, PrivateKeyDer::Pkcs8(key))?;
                 scfg.alpn_protocols = APLN_PROTOCOLS.map(|proto| proto.to_vec()).to_vec();
                 Ok(TlsConfig::Rustls(scfg))
             }

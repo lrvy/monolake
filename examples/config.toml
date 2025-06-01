@@ -1,62 +1,72 @@
-# Runtime configuration
+# MonoLake Configuration
+# HTTP/HTTPS proxy supporting URI, Socket, and Unix Domain Socket upstreams
+
 [runtime]
-runtime_type = "io_uring" # Type of runtime to use (e.g., legacy, io_uring)
-worker_threads = 2        # Number of worker threads
-entries = 1024            # Number of entries for io_uring
+runtime_type = "legacy"
+worker_threads = 2
+entries = 512
 
-# Basic HTTP proxy configuration
-[servers.demo_http]
-name = "monolake.rs"                                                                                                  # Proxy name
+# HTTP Proxy Server
+[servers.http_proxy]
+name = "monolake-demo"
 proxy_type = "http"
-listener = { type = "socket", value = "0.0.0.0:8080" }                                                                # Listener configuration
-upstream_http_version = "http11"                                                                                      # HTTP version for upstream connections
-http_opt_handlers = { content_handler = true }                                                                        # Enable HTTP optional handlers
-http_timeout = { server_keepalive_timeout_sec = 60, upstream_connect_timeout_sec = 2, upstream_read_timeout_sec = 2 }
+listener = { type = "socket", value = "0.0.0.0:8080" }
+upstream_http_version = "http11"
+http_opt_handlers = { content_handler = true }
 
-# Routes for the basic HTTP proxy
-[[servers.demo_http.routes]]
-path = '/' # Route path
+[servers.http_proxy.http_timeout]
+server_keepalive_timeout_sec = 60
+upstream_connect_timeout_sec = 5
+upstream_read_timeout_sec = 10
+
+# Socket upstream demo
+[[servers.http_proxy.routes]]
+path = "/socket"
+upstreams = [{ endpoint = { type = "socket", value = "127.0.0.1:6153" } }]
+
+# URI upstream demo
+[[servers.http_proxy.routes]]
+path = "/uri"
+upstreams = [{ endpoint = { type = "uri", value = "http://httpbin.org/ip" } }]
+
+# Unix Domain Socket upstream demo
+[[servers.http_proxy.routes]]
+path = "/unix"
+upstreams = [{ endpoint = { type = "unix", value = "/tmp/test.sock" } }]
+
+# Load balancing demo (mixed types)
+[[servers.http_proxy.routes]]
+path = "/balance"
 upstreams = [
-    { endpoint = { type = "uri", value = "http://ifconfig.co" } },
-] # Upstream endpoint
-
-[[servers.demo_http.routes]]
-path = '/tls' # Route path for HTTPS endpoint
-upstreams = [
-    { endpoint = { type = "uri", value = "https://ifconfig.co/cdn-cgi/trace" } },
-] # Upstream endpoint
-
-# HTTPS proxy configuration
-[servers.demo_https]
-tls = { chain = "examples/certs/server.crt", key = "examples/certs/server.key" }
-name = "tls.monolake.rs"                                                         # Proxy name
-proxy_type = "http"
-listener = { type = "socket", value = "0.0.0.0:8081" }                           # Listener configuration
-upstream_http_version = "http2"                                                  # Upstream connector uses HTTP/2
-http_opt_handlers = { content_handler = false }                                  # HTTP optional handlers
-
-# Routes for the HTTPS server
-[[servers.demo_https.routes]]
-path = '/' # Route path
-load_balancer = "round_robin" # Load balancer type(by default is random)
-upstreams = [
-    { endpoint = { type = "uri", value = "https://httpbin.org/html" } },
-    { endpoint = { type = "uri", value = "https://httpbin.org/json" } },
+    { endpoint = { type = "socket", value = "127.0.0.1:6153" } },
+    { endpoint = { type = "uri", value = "http://httpbin.org/ip" } },
+    { endpoint = { type = "unix", value = "/tmp/test.sock" } }
 ]
+load_balancer = "round_robin"
 
-[[servers.demo_https.routes]]
-path = '/{*p}'                                                                   # Wild card route path
-upstreams = [{ endpoint = { type = "uri", value = "https://httpbin.org/xml" } }]
+# Default route
+[[servers.http_proxy.routes]]
+path = "/"
+upstreams = [{ endpoint = { type = "uri", value = "http://httpbin.org/ip" } }]
 
-# Unix Domain Socket (UDS) server configuration
-[servers.demo_uds]
-name = "uds.monolake.rs"                                   # Server name
+# HTTPS Proxy Server (requires certificates)
+[servers.https_proxy]
+name = "secure-proxy"
 proxy_type = "http"
-listener = { type = "unix", value = "/tmp/monolake.sock" } # Listener configuration
+listener = { type = "socket", value = "0.0.0.0:8081" }
+tls = { chain = "/app/certs/server.crt", key = "/app/certs/server.pkcs8" }
+upstream_http_version = "http2"
+http_opt_handlers = { content_handler = true }
 
-# Routes for the UDS server
-[[servers.demo_uds.routes]]
-path = '/' # Route path
-upstreams = [
-    { endpoint = { type = "uri", value = "https://ifconfig.me" } },
-] # Upstream endpoint
+[servers.https_proxy.http_timeout]
+server_keepalive_timeout_sec = 60
+upstream_connect_timeout_sec = 5
+upstream_read_timeout_sec = 10
+
+[[servers.https_proxy.routes]]
+path = "/secure"
+upstreams = [{ endpoint = { type = "uri", value = "https://httpbin.org/ip" } }]
+
+[[servers.https_proxy.routes]]
+path = "/"
+upstreams = [{ endpoint = { type = "uri", value = "https://httpbin.org" } }] 

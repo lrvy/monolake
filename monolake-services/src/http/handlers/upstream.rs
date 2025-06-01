@@ -168,6 +168,45 @@ impl UpstreamHandler {
             info!("invalid uri which does not contain host: {:?}", req.uri());
             return Ok((generate_response(StatusCode::BAD_REQUEST, true), true));
         };
+        
+        // Handle Unix Domain Socket
+        if req.uri().scheme_str() == Some("unix") {
+            // For unix scheme, the path is encoded in path_and_query
+            let path_and_query = req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+            
+            // Find where the actual HTTP path starts (after the socket path)
+            let (socket_path, new_http_path) = if path_and_query.starts_with("/tmp/") {
+                // Extract socket path - find the end of the socket file path
+                if let Some(sock_end) = path_and_query.find(".sock") {
+                    let sock_path_end = sock_end + 5; // ".sock".len()
+                    let socket_path = &path_and_query[..sock_path_end];
+                    let http_path = &path_and_query[sock_path_end..];
+                    
+                    let new_path = if http_path.is_empty() { "/" } else { http_path };
+                    (socket_path.to_string(), new_path.to_string())
+                } else {
+                    // Fallback: assume the entire path is the socket path
+                    (path_and_query.to_string(), "/".to_string())
+                }
+            } else {
+                // Fallback for other socket paths
+                (path_and_query.to_string(), "/".to_string())
+            };
+            
+            // Update the request URI to have the correct HTTP path
+            *req.uri_mut() = http::Uri::builder()
+                .scheme("http")
+                .authority("localhost")
+                .path_and_query(new_http_path)
+                .build()
+                .unwrap();
+            
+            debug!("Unix socket path: {}", socket_path);
+            // For now, return an error since we need UnifiedL4Connector
+            info!("Unix socket not supported with current connector");
+            return Ok((generate_response(StatusCode::BAD_REQUEST, true), true));
+        }
+        
         let port = req.uri().port_u16().unwrap_or(80);
         let mut iter = match (host, port).to_socket_addrs() {
             Ok(iter) => iter,

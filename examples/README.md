@@ -1,16 +1,70 @@
-# Getting Started
+# MonoLake Examples
 
-For detailed information on how to get started with the Monolake framework, please refer to the [Getting Started](https://www.cloudwego.io/docs/monolake/getting-started/) guide.
+Quick start examples for MonoLake HTTP/HTTPS proxy with URI, Socket, and Unix Domain Socket upstreams.
 
-## HTTP Example
+## Quick Start
 
-1. Run `gen_cert.sh` to generate needed certificates.
-2. Start monolake with `cargo run -- --config examples/config.toml`.
-3. `curl --resolve gateway.monoio.rs:8081:127.0.0.1 --cacert examples/certs/rootCA.crt -vvv https://gateway.monoio.rs:8081`
+1. **Start MonoLake**:
+   ```bash
+   cargo run -- --config examples/config.toml
+   ```
 
-> Note: Except for the `--cacert path_to_ca`, you can also use `--insecure` to skip the certificate verification.
+2. **Test different endpoints**:
+   ```bash
+   curl http://localhost:8080/          # URI upstream
+   curl http://localhost:8080/socket    # TCP socket upstream (port 6153)
+   curl http://localhost:8080/unix      # Unix Domain Socket upstream
+   curl http://localhost:8080/balance   # Load balancing (mixed types)
+   ```
 
-## Thrift Example
+## Upstream Types
 
-1. Start monolake with `cargo run -- --config examples/thrift.toml`.
-2. Use your client request to `:8081`(will be forwarded to `127.0.0.1:9969`) or `/tmp/thrift_proxy_monolake.sock`(will be forwarded to `/tmp/thrift_server_monolake.sock`)
+- **URI**: HTTP/HTTPS endpoints (e.g., `http://httpbin.org`)
+- **Socket**: TCP socket addresses (e.g., `127.0.0.1:6153`)
+- **Unix**: Unix Domain Socket paths (e.g., `/tmp/test.sock`)
+
+## HTTPS Support
+
+1. **Generate certificates**:
+   ```bash
+   ./examples/gen_cert.sh
+   ```
+
+2. **Test HTTPS**:
+   ```bash
+   curl -k https://localhost:8081/
+   ```
+
+## Docker Usage
+
+**Build**:
+```bash
+docker build -f examples/Dockerfile -t monolake:latest .
+```
+
+**Run with host networking** (recommended):
+```bash
+docker run --network host \
+  -v $(pwd)/examples/config.toml:/app/config.toml:ro \
+  -v $(pwd)/examples/certs:/app/certs:ro \
+  monolake:latest
+```
+
+**Run with port mapping**:
+```bash
+docker run -p 8080:8080 -p 8081:8081 \
+  -v $(pwd)/examples/config.toml:/app/config.toml:ro \
+  -v $(pwd)/examples/certs:/app/certs:ro \
+  monolake:latest
+```
+
+## Testing
+
+- `./test_http_proxy.sh` - HTTP/HTTPS proxy tests
+- `./test_thrift_proxy.sh` - Thrift proxy tests  
+- `./test_docker.sh` - Docker integration tests
+
+## Configuration Files
+
+- `config.toml` - Main HTTP/HTTPS proxy configuration
+- `thrift.toml` - Thrift proxy configuration

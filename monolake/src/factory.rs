@@ -41,8 +41,8 @@ pub fn l7_factory(
 > {
     match &config.protocol {
         crate::config::ServerProtocolConfig::Http { opt_handlers, .. } => {
-            let version: HttpVersion = config.param();
             let http_upstream_timeout: HttpUpstreamTimeout = config.param();
+            let version: HttpVersion = config.param();
             let enable_content_handler = opt_handlers.content_handler;
             let stacks = FactoryStack::new(config.clone())
                 .replace(UpstreamHandler::factory(http_upstream_timeout, version))

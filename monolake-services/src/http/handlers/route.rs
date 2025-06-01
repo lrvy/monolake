@@ -376,45 +376,99 @@ impl<F> RewriteAndRouteHandler<F> {
 }
 
 fn rewrite_request<B>(request: &mut Request<B>, endpoint: &Endpoint) {
-    let remote = match endpoint {
-        Endpoint::Uri(uri) => uri,
-        _ => unimplemented!("not implement"),
-    };
+    match endpoint {
+        Endpoint::Uri(uri) => {
+            if let Some(authority) = uri.authority() {
+                let header_value =
+                    HeaderValue::from_str(authority.as_str()).unwrap_or(HeaderValue::from_static(""));
+                tracing::debug!(
+                    "Request: {:?} -> {:?}",
+                    request.headers().get(http::header::HOST),
+                    header_value
+                );
 
-    if let Some(authority) = remote.authority() {
-        let header_value =
-            HeaderValue::from_str(authority.as_str()).unwrap_or(HeaderValue::from_static(""));
-        tracing::debug!(
-            "Request: {:?} -> {:?}",
-            request.headers().get(http::header::HOST),
-            header_value
-        );
+                request.headers_mut().remove(http::header::HOST);
 
-        request.headers_mut().remove(http::header::HOST);
+                request
+                    .headers_mut()
+                    .insert(http::header::HOST, header_value);
 
-        request
-            .headers_mut()
-            .insert(http::header::HOST, header_value);
+                let scheme = match uri.scheme() {
+                    Some(scheme) => scheme.to_owned(),
+                    None => Scheme::HTTP,
+                };
 
-        let scheme = match remote.scheme() {
-            Some(scheme) => scheme.to_owned(),
-            None => Scheme::HTTP,
-        };
+                let uri = request.uri_mut();
+                let path_and_query = match uri.path_and_query() {
+                    Some(path_and_query) => match path_and_query.query() {
+                        Some(query) => format!("{}?{}", uri.path(), query),
+                        None => String::from(uri.path()),
+                    },
+                    None => "/".to_string(),
+                };
+                *uri = http::Uri::builder()
+                    .authority(authority.to_owned())
+                    .scheme(scheme)
+                    .path_and_query(path_and_query)
+                    .build()
+                    .unwrap();
+            }
+        }
+        Endpoint::Socket(addr) => {
+            let authority = addr.to_string();
+            let header_value = HeaderValue::from_str(&authority).unwrap_or(HeaderValue::from_static(""));
+            
+            tracing::debug!(
+                "Socket Request: {:?} -> {:?}",
+                request.headers().get(http::header::HOST),
+                header_value
+            );
 
-        let uri = request.uri_mut();
-        let path_and_query = match uri.path_and_query() {
-            Some(path_and_query) => match path_and_query.query() {
-                Some(query) => format!("{}?{}", remote.path(), query),
-                None => String::from(remote.path()),
-            },
-            None => "/".to_string(),
-        };
-        *uri = http::Uri::builder()
-            .authority(authority.to_owned())
-            .scheme(scheme)
-            .path_and_query(path_and_query)
-            .build()
-            .unwrap();
+            request.headers_mut().remove(http::header::HOST);
+            request.headers_mut().insert(http::header::HOST, header_value);
+
+            let uri = request.uri_mut();
+            let path_and_query = match uri.path_and_query() {
+                Some(path_and_query) => path_and_query.to_string(),
+                None => "/".to_string(),
+            };
+            
+            *uri = http::Uri::builder()
+                .scheme("http")
+                .authority(authority)
+                .path_and_query(path_and_query)
+                .build()
+                .unwrap();
+        }
+        Endpoint::Unix(path) => {
+            // For Unix endpoints, use a special scheme and encode path in authority
+            let path_str = path.to_string_lossy();
+            
+            tracing::debug!(
+                "Unix Socket Request: {:?} -> unix socket path: {}",
+                request.headers().get(http::header::HOST),
+                path_str
+            );
+
+            // Set a special header for unix socket path identification
+            request.headers_mut().remove(http::header::HOST);
+            request.headers_mut().insert(http::header::HOST, HeaderValue::from_static("unix-socket"));
+
+            let uri = request.uri_mut();
+            let path_and_query = match uri.path_and_query() {
+                Some(path_and_query) => path_and_query.to_string(),
+                None => "/".to_string(),
+            };
+            
+            // Create a special unix scheme URI with localhost as authority
+            // We'll pass the real path through the scheme check in upstream.rs
+            *uri = http::Uri::builder()
+                .scheme("unix")
+                .authority("localhost")
+                .path_and_query(format!("{}{}", path_str, path_and_query))
+                .build()
+                .unwrap();
+        }
     }
 }
 

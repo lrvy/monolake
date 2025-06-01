@@ -3,10 +3,12 @@ use std::{path::Path, sync::Arc};
 use anyhow::Result;
 use clap::Parser;
 use monolake_core::{
-    config::{RuntimeConfig, RuntimeType},
+    config::RuntimeConfig,
     listener::ListenerBuilder,
     orchestrator::WorkerManager,
 };
+#[cfg(target_os = "linux")]
+use monolake_core::config::RuntimeType;
 use service_async::AsyncMakeServiceWrapper;
 use tracing_subscriber::{filter::LevelFilter, fmt, prelude::*, EnvFilter};
 

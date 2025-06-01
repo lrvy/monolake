@@ -66,7 +66,7 @@
 //!             route::RouteConfig, ConnectionReuseHandler, ContentHandler, RewriteAndRouteHandler,
 //!             UpstreamHandler,
 //!         },
-//!         HttpServerTimeout,
+//!         HttpServerTimeout, HttpVersion,
 //!     },
 //! };
 //! use service_async::{layer::FactoryLayer, stack::FactoryStack, Param};
@@ -90,7 +90,7 @@
 //! let stacks = FactoryStack::new(config)
 //!     .replace(UpstreamHandler::factory(
 //!         Default::default(),
-//!         Default::default(),
+//!         HttpVersion::default(),
 //!     ))
 //!     .push(ContentHandler::layer())
 //!     .push(RewriteAndRouteHandler::layer())
