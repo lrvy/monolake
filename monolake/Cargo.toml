@@ -43,31 +43,8 @@ clap = { version = "4", features = ['derive'] }
 serde_json = "1"
 toml = "0.8"
 
-# 开发时优化配置
 [profile.dev]
-# 减少优化以提高编译速度
 opt-level = 0
-# 开启增量编译
 incremental = true
-# 保留调试信息但减少大小
 debug = 1
-# 启用并行代码生成
 codegen-units = 256
-
-# 快速开发构建配置
-[profile.dev-fast]
-inherits = "dev"
-opt-level = 1
-debug = false
-# 最大化并行编译
-codegen-units = 256
-
-[profile.release-lto]
-inherits = "release"
-lto = true
-
-# 快速发布构建（不使用LTO）
-[profile.release-fast]
-inherits = "release"
-lto = false
-codegen-units = 1
